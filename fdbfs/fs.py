@@ -1,5 +1,6 @@
 import fdb
 import uuid
+import math
 
 
 CHUNK_SIZE = 10240  # 10K
@@ -41,22 +42,19 @@ class FdbFsFile(object):
         self._db = db
         self._space = space
         self._cursor = 0
-        self._chunk_index = 0
 
-    def seek(self, cursor):
+    def seek(self, cursor, whence=1):
         pass
 
     def tell(self):
         return self._cursor
 
-    def get_chunk_index(self):
-        return self._chunk_index
-
     def write(self, data):
-        self._write_chunk(self._db, self._chunk_index, data)
+        # this is not thread-safe
+        self._cursor = self._write(self._db, self._cursor, data)
 
     def read(self, size=None):
-        return self._read_chunk(self._db, self._chunk_index)
+        return self._read_chunk(self._db, self._cursor)
 
     def flush(self):
         # later
@@ -67,10 +65,51 @@ class FdbFsFile(object):
         pass
 
     @fdb.transactional
-    def _write_chunk(self, tr, chunk_index, chunk):
-        assert len(chunk) <= CHUNK_SIZE
-        tr[self._space.pack((chunk_index,))] = chunk
+    def _write(self, tr, cursor, data):
+        buf = buffer(data)
+
+        chunks = int(math.ceil(float(len(buf)) / CHUNK_SIZE))
+        chunk_index = cursor / CHUNK_SIZE
+        start_cursor = chunk_index * CHUNK_SIZE
+
+        # write the first partial chunk
+        if start_cursor != cursor:
+            next_cursor = start_cursor + CHUNK_SIZE
+            chunk = tr[self._space.pack((chunk_index,))]
+
+            # support this later
+            assert chunk.present(), 'Do not support missing chunk yet'
+
+            # TODO: we may cache this current chunk to avoid repeat reading
+            new_chunk = chunk[0:cursor - start_cursor] + buf[0:next_cursor - cursor]
+            tr[self._space.pack((chunk_index,))] = new_chunk
+
+            buf = buffer(data, next_cursor - cursor)
+
+            # advance the cursor
+            if len(new_chunk) == CHUNK_SIZE:
+                cursor = next_cursor
+            else:
+                cursor = start_cursor + len(new_chunk)
+
+            if len(buf) == 0:
+                return cursor
+
+            return self._write(tr, cursor, buf)
+
+        for i in range(chunks):
+            chunk = data[i * CHUNK_SIZE:(i+1) * CHUNK_SIZE]
+            chunk_size = len(chunk)
+            assert chunk_size <= CHUNK_SIZE
+
+            tr[self._space.pack((chunk_index,))] = chunk
+            cursor += len(chunk)
+            if chunk_size == CHUNK_SIZE:
+                chunk_index += 1
+
+        return cursor
 
     @fdb.transactional
-    def _read_chunk(self, tr, chunk_index):
+    def _read_chunk(self, tr, cursor):
+        chunk_index = cursor / CHUNK_SIZE
         return tr[self._space.pack((chunk_index,))]
