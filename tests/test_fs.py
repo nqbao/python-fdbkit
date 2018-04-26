@@ -7,7 +7,6 @@ class FsTestCase(TestCase):
     def setUp(self):
         self.db = fdb.open()
         self.directory = ('fdbfs-test',)
-        print 123
 
     def tearDown(self):
         del self.db[
