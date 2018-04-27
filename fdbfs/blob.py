@@ -28,12 +28,16 @@ class BlobReader(object):
         self._space = space
         self._chunk_size = chunk_size
         self._cursor = 0
+        self._closed = False
 
     def read(self, size=None):
-        return self._read_chunk(self._db, self._cursor)
+        if self._closed:
+            raise IOError('Reader is closed')
+
+        return self._read_chunk(self._db, self._cursor, size)
 
     @fdb.transactional
-    def _read_chunk(self, tr, cursor):
+    def _read_chunk(self, tr, cursor, size):
         r = self._space.range()
 
         buf = StringIO()
@@ -48,14 +52,21 @@ class BlobReader(object):
 
         return buf.getvalue()
 
-    def seek(self, cursor):
+    def seek(self, cursor, whence=None):
         self._cursor = cursor
 
     def tell(self):
         return self._cursor
 
     def close(self):
-        pass
+        self._closed = True
+
+    @property
+    def closed(self):
+        """
+        Return True if reader is closed
+        """
+        return self._closed
 
 
 class BlobWriter(object):
@@ -67,8 +78,12 @@ class BlobWriter(object):
         self._space = space
         self._chunk_size = chunk_size
         self._cursor = 0
+        self._closed = False
 
     def write(self, data):
+        if self._closed:
+            raise IOError('Writer is closed')
+
         # this is not thread-safe
         self._cursor = self._write(self._db, self._cursor, data)
 
@@ -116,11 +131,18 @@ class BlobWriter(object):
 
         return cursor
 
-    def seek(self, cursor):
-        pass
+    def seek(self, cursor, whence=None):
+        self.cursor = cursor
 
     def tell(self):
         return self._cursor
 
     def close(self):
-        pass
+        self._closed = True
+
+    @property
+    def closed(self):
+        """
+        Return True if writer is closed
+        """
+        return self._closed

@@ -36,3 +36,18 @@ class BlobTestCase(TestCase):
 
         reader.seek(2)
         self.assertEquals('cdefg', reader.read())
+
+    def test_close_write(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+        writer.write('abcdefg')
+        writer.close()
+
+        self.assertTrue(writer.closed)
+        with self.assertRaises(IOError):
+            writer.write('hij')
+
+        reader = BlobReader(self.db, self.directory, 4)
+        reader.close()
+        self.assertTrue(reader.closed)
+        with self.assertRaises(IOError):
+            reader.read()
