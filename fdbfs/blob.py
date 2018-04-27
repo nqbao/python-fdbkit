@@ -1,5 +1,6 @@
 import fdb
 import math
+from StringIO import StringIO
 
 
 DEFAULT_CHUNK_SIZE = 1024*10
@@ -33,8 +34,19 @@ class BlobReader(object):
 
     @fdb.transactional
     def _read_chunk(self, tr, cursor):
-        chunk_index = cursor / self._chunk_size
-        return tr[self._space.pack((chunk_index,))]
+        r = self._space.range()
+
+        buf = StringIO()
+        for k, v in tr.get_range(r.start, r.stop):
+            chunk_index = self._space.unpack(k)[0]
+            start_cursor = chunk_index * self._chunk_size
+
+            if cursor >= start_cursor:
+                chunk = v[cursor - start_cursor:]
+                cursor += len(chunk)
+                buf.write(chunk)
+
+        return buf.getvalue()
 
     def seek(self, cursor):
         self._cursor = cursor
