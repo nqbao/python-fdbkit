@@ -24,6 +24,16 @@ class BlobTestCase(TestCase):
         reader = BlobReader(self.db, self.directory, 4)
         self.assertEquals('abcdefg', reader.read())
 
+    def test_seek_write(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+        writer.write('abcdefgh')
+
+        writer.seek(5)
+        writer.write('12345')
+
+        reader = BlobReader(self.db, self.directory, 4)
+        self.assertEquals('abcde12345', reader.read())
+
     def test_seek_read(self):
         writer = BlobWriter(self.db, self.directory, 4)
         writer.write('abcdefg')

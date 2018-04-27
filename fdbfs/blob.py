@@ -132,7 +132,7 @@ class BlobWriter(object):
         return cursor
 
     def seek(self, cursor, whence=None):
-        self.cursor = cursor
+        self._cursor = cursor
 
     def tell(self):
         return self._cursor

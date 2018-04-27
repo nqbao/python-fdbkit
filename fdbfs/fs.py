@@ -25,6 +25,7 @@ class FdbFs(object):
         """
         Allocate an unique blob id for the file
         """
+        # TODO: use fdb instead of key prefix directory
         filename_key = self._files.pack((filename,))
 
         if not tr[filename_key].present():
