@@ -14,6 +14,13 @@ class BlobTestCase(TestCase):
         ]
         self.db = None
 
+    def _read_all(self, chunk_size=4):
+        reader = BlobReader(self.db, self.directory, chunk_size)
+        data = reader.read()
+        reader.close()
+
+        return data
+
     def test_blob_writer(self):
         writer = BlobWriter(self.db, self.directory, 4)
         writer.write('abcd')
@@ -21,8 +28,7 @@ class BlobTestCase(TestCase):
 
         self.assertEqual(7, writer.tell())
 
-        reader = BlobReader(self.db, self.directory, 4)
-        self.assertEquals('abcdefg', reader.read())
+        self.assertEquals('abcdefg', self._read_all())
 
     def test_seek_write(self):
         writer = BlobWriter(self.db, self.directory, 4)
@@ -31,8 +37,16 @@ class BlobTestCase(TestCase):
         writer.seek(5)
         writer.write('12345')
 
-        reader = BlobReader(self.db, self.directory, 4)
-        self.assertEquals('abcde12345', reader.read())
+        self.assertEquals('abcde12345', self._read_all())
+
+    def test_outbound_seek_write(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+        writer.write('abcdefgh')
+        self.assertEquals(8, writer.tell())
+
+        # can't go out of blob size
+        writer.seek(100)
+        self.assertEquals(8, writer.tell())
 
     def test_seek_read(self):
         writer = BlobWriter(self.db, self.directory, 4)
@@ -47,7 +61,7 @@ class BlobTestCase(TestCase):
         reader.seek(2)
         self.assertEquals('cdefg', reader.read())
 
-    def test_close_write(self):
+    def test_closed_reader_writer(self):
         writer = BlobWriter(self.db, self.directory, 4)
         writer.write('abcdefg')
         writer.close()

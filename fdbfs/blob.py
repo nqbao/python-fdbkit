@@ -1,6 +1,7 @@
 import fdb
 import math
-from StringIO import StringIO
+import os
+from io import BytesIO
 
 
 DEFAULT_CHUNK_SIZE = 1024*10
@@ -19,10 +20,7 @@ class BlobManager(object):
         pass
 
 
-class BlobReader(object):
-    """
-    Seekable blob reader
-    """
+class BlobIO(object):
     def __init__(self, db, space, chunk_size):
         self._db = db
         self._space = space
@@ -30,9 +28,63 @@ class BlobReader(object):
         self._cursor = 0
         self._closed = False
 
+    def tell(self):
+        """
+        Return current cursor information
+        """
+        return self._cursor
+
+    def close(self):
+        """
+        Close the object and prevent any further access
+        """
+        self._closed = True
+
+    @property
+    def closed(self):
+        """
+        Return True if writer is closed
+        """
+        return self._closed
+
+    def seek(self, cursor, whence=0):
+        """
+        Change current cursor
+        """
+        if self._closed:
+            raise IOError('Can not access closed blob')
+
+        if whence == os.SEEK_SET:
+            new_cursor = cursor
+        else:
+            raise NotImplementedError()
+
+        self._cursor = self._seek(self._db, new_cursor)
+
+    @fdb.transactional
+    def _seek(self, tr, cursor):
+        # query the biggest chunk
+        r = self._space.range()
+        for k, v in (tr.get_range(r.start, r.stop, 1, True)):
+            last_chunk_index = self._space.unpack(k)[-1]
+            last_chunk_cursor = last_chunk_index * self._chunk_size
+
+            # truncate the cursor at the end of the last chunk
+            if cursor >= last_chunk_cursor:
+                chunk_length = len(v)
+                cursor = min(cursor, last_chunk_cursor + chunk_length)
+
+        return max(cursor, 0)
+
+
+class BlobReader(BlobIO):
+    """
+    Seekable blob reader
+    """
+
     def read(self, size=None):
         if self._closed:
-            raise IOError('Reader is closed')
+            raise IOError('Can not access closed blob')
 
         return self._read_chunk(self._db, self._cursor, size)
 
@@ -40,7 +92,7 @@ class BlobReader(object):
     def _read_chunk(self, tr, cursor, size):
         r = self._space.range()
 
-        buf = StringIO()
+        buf = BytesIO()
         for k, v in tr.get_range(r.start, r.stop):
             chunk_index = self._space.unpack(k)[0]
             start_cursor = chunk_index * self._chunk_size
@@ -52,37 +104,15 @@ class BlobReader(object):
 
         return buf.getvalue()
 
-    def seek(self, cursor, whence=None):
-        self._cursor = cursor
 
-    def tell(self):
-        return self._cursor
-
-    def close(self):
-        self._closed = True
-
-    @property
-    def closed(self):
-        """
-        Return True if reader is closed
-        """
-        return self._closed
-
-
-class BlobWriter(object):
+class BlobWriter(BlobIO):
     """
     Seekable blob writer
     """
-    def __init__(self, db, space, chunk_size):
-        self._db = db
-        self._space = space
-        self._chunk_size = chunk_size
-        self._cursor = 0
-        self._closed = False
 
     def write(self, data):
         if self._closed:
-            raise IOError('Writer is closed')
+            raise IOError('Can not access closed blob')
 
         # this is not thread-safe
         self._cursor = self._write(self._db, self._cursor, data)
@@ -130,19 +160,3 @@ class BlobWriter(object):
             chunk_index += 1
 
         return cursor
-
-    def seek(self, cursor, whence=None):
-        self._cursor = cursor
-
-    def tell(self):
-        return self._cursor
-
-    def close(self):
-        self._closed = True
-
-    @property
-    def closed(self):
-        """
-        Return True if writer is closed
-        """
-        return self._closed
