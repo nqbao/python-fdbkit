@@ -1,5 +1,5 @@
 from unittest import TestCase
-from fdbfs.blob import BlobWriter, BlobReader
+from fdbkit.blob import BlobWriter, BlobReader
 import fdb
 
 
