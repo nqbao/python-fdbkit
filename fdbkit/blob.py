@@ -54,27 +54,35 @@ class BlobIO(object):
         if self._closed:
             raise IOError('Can not access closed blob')
 
+        self._cursor = self._seek(self._db, self._cursor, cursor, whence)
+
+    @fdb.transactional
+    def _seek(self, tr, current, cursor, whence):
+        l = self._get_size(tr)
+
         if whence == os.SEEK_SET:
             new_cursor = cursor
+        elif whence == os.SEEK_CUR:
+            new_cursor = current + cursor
+        elif whence == os.SEEK_END:
+            new_cursor = l + cursor
         else:
             raise NotImplementedError()
 
-        self._cursor = self._seek(self._db, new_cursor)
+        return min(max(new_cursor, 0), l)
 
     @fdb.transactional
-    def _seek(self, tr, cursor):
-        # query the biggest chunk
+    def _get_size(self, tr):
+        # query the last chunk
         r = self._space.range()
+        l = 0
         for k, v in (tr.get_range(r.start, r.stop, 1, True)):
             last_chunk_index = self._space.unpack(k)[-1]
             last_chunk_cursor = last_chunk_index * self._chunk_size
 
-            # truncate the cursor at the end of the last chunk
-            if cursor >= last_chunk_cursor:
-                chunk_length = len(v)
-                cursor = min(cursor, last_chunk_cursor + chunk_length)
+            l = last_chunk_cursor + len(v)
 
-        return max(cursor, 0)
+        return l
 
 
 class BlobReader(BlobIO):

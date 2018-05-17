@@ -39,6 +39,21 @@ class BlobTestCase(TestCase):
 
         self.assertEquals('abcde12345', self._read_all())
 
+        # SEEK_CUR
+        writer.seek(-1, 1)
+        self.assertEqual(writer.tell(), 9)
+
+    def test_seek_end(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+        writer.write('12345')
+        writer.seek(-1, 2)  # SEEK_END
+
+        self.assertEqual(writer.tell(), 4)
+        writer.write('abcd')
+        writer.close()
+
+        self.assertEquals('1234abcd', self._read_all())
+
     def test_outbound_seek_write(self):
         writer = BlobWriter(self.db, self.directory, 4)
         writer.write('abcdefgh')
