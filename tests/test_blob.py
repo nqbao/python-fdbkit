@@ -1,5 +1,5 @@
 from unittest import TestCase
-from fdbkit.blob import BlobWriter, BlobReader
+from fdbkit.blob import BlobWriter, BlobReader, BlobManager
 import fdb
 
 
@@ -20,6 +20,25 @@ class BlobTestCase(TestCase):
         reader.close()
 
         return data
+
+    def test_manager(self):
+        manager = BlobManager(self.db, ('blob-test',), 4)
+        with manager.get_writer('test') as writer:
+            writer.write('hello world')
+
+        with manager.get_reader('test') as reader:
+            self.assertEquals('hello world', reader.read())
+
+        manager.write('test2', '12345')
+        self.assertEquals(manager.read('test2'), '12345')
+
+    def test_delete(self):
+        manager = BlobManager(self.db, ('blob-test',), 4)
+        self.assertFalse(manager.exists('test'))
+        manager.write('test', '1111')
+        self.assertTrue(manager.exists('test'))
+        manager.delete('test')
+        self.assertFalse(manager.exists('test'))
 
     def test_blob_writer(self):
         writer = BlobWriter(self.db, self.directory, 4)

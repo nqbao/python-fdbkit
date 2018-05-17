@@ -14,10 +14,30 @@ class BlobManager(object):
         self._chunk_size = chunk_size
 
     def get_reader(self, key):
-        pass
+        return BlobReader(self._db, self._space[key], self._chunk_size)
 
     def get_writer(self, key):
-        pass
+        return BlobWriter(self._db, self._space[key], self._chunk_size)
+
+    def read(self, key):
+        with self.get_reader(key) as reader:
+            return reader.read()
+
+    def write(self, key, data):
+        with self.get_writer(key) as writer:
+            return writer.write(data)
+
+    def delete(self, key):
+        self._delete(self._db, key)
+
+    @fdb.transactional
+    def _delete(self, tr, key):
+        space = self._space[key]
+        del tr[space.range()]
+
+    def exists(self, key):
+        r = self._space[key].range()
+        return len(self._db.get_range(r.start, r.stop, limit=1, reverse=True)) > 0
 
 
 class BlobIO(object):
@@ -83,6 +103,13 @@ class BlobIO(object):
             l = last_chunk_cursor + len(v)
 
         return l
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
 
 
 class BlobReader(BlobIO):
