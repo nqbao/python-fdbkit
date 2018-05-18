@@ -84,16 +84,26 @@ class BlobTestCase(TestCase):
 
     def test_seek_read(self):
         writer = BlobWriter(self.db, self.directory, 4)
-        writer.write('abcdefg')
+        writer.write('abcdefghijklmnop')
 
-        self.assertEqual(7, writer.tell())
+        self.assertEqual(16, writer.tell())
 
         reader = BlobReader(self.db, self.directory, 4)
         reader.seek(4)
-        self.assertEquals('efg', reader.read())
+        self.assertEquals('efghijklmnop', reader.read())
 
         reader.seek(2)
-        self.assertEquals('cdefg', reader.read())
+        self.assertEquals('cdefghijklmnop', reader.read())
+
+    def test_large_chunk(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+
+        for i in range(513):
+            writer.write("1234")
+
+        reader = BlobReader(self.db, self.directory, 4)
+        reader.seek(2040)
+        self.assertEqual(reader.read(), "123412341234")
 
     def test_closed_reader_writer(self):
         writer = BlobWriter(self.db, self.directory, 4)

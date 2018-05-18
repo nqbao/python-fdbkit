@@ -121,15 +121,23 @@ class BlobReader(BlobIO):
         if self._closed:
             raise IOError('Can not access closed blob')
 
+        assert size is None
+
         return self._read_chunk(self._db, self._cursor, size)
 
     @fdb.transactional
     def _read_chunk(self, tr, cursor, size):
+        start_chunk = cursor / self._chunk_size
+
         r = self._space.range()
 
         buf = BytesIO()
-        for k, v in tr.get_range(r.start, r.stop):
+
+        # TODO: support range read here
+        for k, v in tr.get_range(self._space.pack((start_chunk,)), r.stop):
             chunk_index = self._space.unpack(k)[0]
+            # print chunk_index, ":".join("{:02x}".format(ord(c)) for c in k)
+
             start_cursor = chunk_index * self._chunk_size
 
             if cursor >= start_cursor:
