@@ -95,6 +95,17 @@ class BlobTestCase(TestCase):
         reader.seek(2)
         self.assertEquals('cdefghijklmnop', reader.read())
 
+    def test_range_read(self):
+        writer = BlobWriter(self.db, self.directory, 4)
+        writer.write('abcdefghijklmnop')
+
+        reader = BlobReader(self.db, self.directory, 4)
+        reader.seek(2)
+
+        self.assertEquals(reader.read(4), 'cdef')
+        reader.seek(6)
+        self.assertEquals(reader.read(2), 'gh')
+
     def test_large_chunk(self):
         writer = BlobWriter(self.db, self.directory, 4)
 

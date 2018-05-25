@@ -121,20 +121,26 @@ class BlobReader(BlobIO):
         if self._closed:
             raise IOError('Can not access closed blob')
 
-        assert size is None
-
-        return self._read_chunk(self._db, self._cursor, size)
+        buf, cursor = self._read_chunk(self._db, self._cursor, size)
+        self._cursor = cursor
+        return buf.getvalue()
 
     @fdb.transactional
     def _read_chunk(self, tr, cursor, size):
         start_chunk = cursor / self._chunk_size
+        start_key = self._space.pack((start_chunk,))
 
-        r = self._space.range()
+        if size:
+            # foundationdb returns the range *exclusive* to the end
+            end_chunk = (cursor + size) / self._chunk_size
+            end_key = fdb.KeySelector.first_greater_than(self._space.pack((end_chunk,)))
+        else:
+            # end_key = self._space.key() + b'\xff'
+            end_key = self._space.range().stop
 
         buf = BytesIO()
 
-        # TODO: support range read here
-        for k, v in tr.get_range(self._space.pack((start_chunk,)), r.stop):
+        for k, v in tr.get_range(start_key, end_key):
             chunk_index = self._space.unpack(k)[0]
             # print chunk_index, ":".join("{:02x}".format(ord(c)) for c in k)
 
@@ -142,10 +148,23 @@ class BlobReader(BlobIO):
 
             if cursor >= start_cursor:
                 chunk = v[cursor - start_cursor:]
-                cursor += len(chunk)
+                chunk_size = len(chunk)
+
+                if size:
+                    if size < chunk_size:
+                        chunk = chunk[:size]
+                        chunk_size = size
+                    else:
+                        size -= chunk_size
+
+                cursor += chunk_size
                 buf.write(chunk)
 
-        return buf.getvalue()
+                # special case when we are just at the boundary of the chunk
+                if size == 0:
+                    break
+
+        return buf, cursor
 
 
 class BlobWriter(BlobIO):
